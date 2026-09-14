@@ -3,9 +3,13 @@ import {
   exportPlaylist,
   fileUrl,
   fmtBytes,
+  getFailedJobs,
   getFiles,
   getPlaylists,
+  retryJob,
+  retryPlaylist,
   type ExportFile,
+  type FailedJob,
   type Playlist,
   zipUrl,
 } from "./api.ts";
@@ -15,14 +19,24 @@ const POLL_MS = 15000;
 function PlaylistCard({
   playlist,
   onExported,
+  onRefresh,
 }: {
   playlist: Playlist;
   onExported: (p: Playlist) => void;
+  onRefresh: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [files, setFiles] = useState<ExportFile[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+
+  const [showFailures, setShowFailures] = useState(false);
+  const [failures, setFailures] = useState<FailedJob[] | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [retryAllBusy, setRetryAllBusy] = useState(false);
+  const [failMsg, setFailMsg] = useState("");
+
+  const failureCount = playlist.stats.failed + playlist.stats.blocked;
 
   const toggleFiles = useCallback(async () => {
     setOpen((o) => !o);
@@ -34,6 +48,53 @@ function PlaylistCard({
       }
     }
   }, [files, playlist.id]);
+
+  const loadFailures = useCallback(async () => {
+    setFailMsg("");
+    try {
+      const { jobs } = await getFailedJobs(playlist.id);
+      setFailures(jobs);
+    } catch (e) {
+      setFailMsg(e instanceof Error ? e.message : "failed to load failures");
+    }
+  }, [playlist.id]);
+
+  const toggleFailures = useCallback(() => {
+    setShowFailures((s) => !s);
+    if (failures === null) void loadFailures();
+  }, [failures, loadFailures]);
+
+  const doRetryJob = useCallback(
+    async (job: FailedJob) => {
+      setRetryingId(job.id);
+      setFailMsg("");
+      try {
+        await retryJob(playlist.id, job.id);
+        await loadFailures();
+        await onRefresh();
+      } catch (e) {
+        setFailMsg(e instanceof Error ? e.message : "retry failed");
+      } finally {
+        setRetryingId(null);
+      }
+    },
+    [loadFailures, onRefresh, playlist.id],
+  );
+
+  const doRetryAll = useCallback(async () => {
+    setRetryAllBusy(true);
+    setFailMsg("");
+    try {
+      const res = await retryPlaylist(playlist.id);
+      setFailMsg(`requeued ${res.requeued}`);
+      await loadFailures();
+      await onRefresh();
+    } catch (e) {
+      setFailMsg(e instanceof Error ? e.message : "retry failed");
+    } finally {
+      setRetryAllBusy(false);
+    }
+  }, [loadFailures, onRefresh, playlist.id]);
 
   const doExport = useCallback(async () => {
     setBusy(true);
@@ -50,6 +111,13 @@ function PlaylistCard({
       setBusy(false);
     }
   }, [onExported, playlist.id]);
+
+  useEffect(() => {
+    if (!showFailures) return;
+    void loadFailures();
+    const t = setInterval(() => void loadFailures(), POLL_MS);
+    return () => clearInterval(t);
+  }, [showFailures, loadFailures]);
 
   const s = playlist.stats;
   const pct = s.total > 0 ? Math.round((s.done / s.total) * 100) : 0;
@@ -98,6 +166,11 @@ function PlaylistCard({
         <button className="btn ghost" onClick={toggleFiles}>
           {open ? "Hide" : "Files"}
         </button>
+        {failureCount > 0 && (
+          <button className="btn danger" onClick={toggleFailures}>
+            {showFailures ? "Hide failures" : `Failures (${failureCount})`}
+          </button>
+        )}
       </div>
       {msg && <div className="msg">{msg}</div>}
 
@@ -114,6 +187,46 @@ function PlaylistCard({
                   <span className="fname">{f.name}</span>
                   <span className="muted fsize">{fmtBytes(f.size)}</span>
                   <a className="mini" href={fileUrl(playlist.id, f.name)}>↓</a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {showFailures && (
+        <div className="filelist failures">
+          <div className="fail-head">
+            <b>Failed / blocked tracks</b>
+            <button
+              className="btn primary small"
+              onClick={() => void doRetryAll()}
+              disabled={retryAllBusy || failures === null || failures.length === 0}
+            >
+              {retryAllBusy ? "Retrying…" : `Retry all (${failures?.length ?? "…"})`}
+            </button>
+          </div>
+          {failMsg && <div className="msg">{failMsg}</div>}
+          {failures === null ? (
+            <div className="muted">loading…</div>
+          ) : failures.length === 0 ? (
+            <div className="muted">nothing failed — all clear</div>
+          ) : (
+            <ul>
+              {failures.map((f) => (
+                <li key={f.id} className="fail-row">
+                  <div className="fail-info">
+                    <span className="chip fail">{f.status}</span>
+                    <span className="fname">{f.artistName} — {f.trackName}</span>
+                  </div>
+                  {f.error && <div className="fail-error" title={f.error}>{f.error}</div>}
+                  <button
+                    className="btn ghost small"
+                    onClick={() => void doRetryJob(f)}
+                    disabled={retryingId !== null}
+                  >
+                    {retryingId === f.id ? "Retrying…" : "Retry"}
+                  </button>
                 </li>
               ))}
             </ul>
@@ -168,7 +281,7 @@ export default function App() {
 
       <main className="grid">
         {playlists.map((p) => (
-          <PlaylistCard key={p.id} playlist={p} onExported={onExported} />
+          <PlaylistCard key={p.id} playlist={p} onExported={onExported} onRefresh={refresh} />
         ))}
       </main>
 

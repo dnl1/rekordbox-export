@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { aurral, type Playlist } from "./aurral.ts";
+import { aurral, type FailedJob, type Playlist } from "./aurral.ts";
 import { exportDir, listExports, runExport, streamFile, streamZip } from "./export.ts";
+import { retryJob as aurralRetryJob, retryPlaylist as aurralRetryPlaylist } from "./aurralApi.ts";
 
 function findPlaylist(id: string): Playlist {
   const p = aurral.playlists().find((x) => x.id === id);
@@ -55,5 +56,29 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/playlists/:id/zip", async (req, reply) => {
     const { id } = req.params as { id: string };
     streamZip(findPlaylist(id), reply);
+  });
+
+  app.get("/api/playlists/:id/jobs", async (req) => {
+    const { id } = req.params as { id: string };
+    const playlist = findPlaylist(id);
+    return { playlistId: id, kind: playlist.kind, jobs: aurral.failedJobs(id) };
+  });
+
+  app.post("/api/playlists/:id/retry", async (req) => {
+    const { id } = req.params as { id: string };
+    const playlist = findPlaylist(id);
+    const result = await aurralRetryPlaylist(playlist);
+    return { success: true, ...result };
+  });
+
+  app.post("/api/playlists/:id/jobs/:jobId/retry", async (req) => {
+    const { id, jobId } = req.params as { id: string; jobId: string };
+    const playlist = findPlaylist(id);
+    const job: FailedJob | undefined = aurral.failedJobs(id).find((j) => j.id === jobId);
+    if (!job) {
+      throw Object.assign(new Error("job not found or not failed"), { statusCode: 404 });
+    }
+    await aurralRetryJob(playlist, job);
+    return { success: true };
   });
 }

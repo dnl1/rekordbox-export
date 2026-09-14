@@ -23,6 +23,17 @@ export interface ExportFile {
   size: number;
 }
 
+export interface FailedJob {
+  id: string;
+  artistName: string;
+  trackName: string;
+  albumName: string | null;
+  status: "failed" | "blocked";
+  error: string | null;
+  createdAt: number | null;
+  completedAt: number | null;
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
@@ -47,6 +58,20 @@ export function fileUrl(id: string, name: string): string {
 
 export function zipUrl(id: string): string {
   return `/api/playlists/${id}/zip`;
+}
+
+export function getFailedJobs(id: string): Promise<{ playlistId: string; kind: string; jobs: FailedJob[] }> {
+  return api(`/api/playlists/${id}/jobs`);
+}
+
+export function retryPlaylist(
+  id: string,
+): Promise<{ success: boolean; requeued: number; jobs?: { id: string; ok: boolean; detail?: string }[] }> {
+  return api(`/api/playlists/${id}/retry`, { method: "POST" });
+}
+
+export function retryJob(id: string, jobId: string): Promise<{ success: boolean }> {
+  return api(`/api/playlists/${id}/jobs/${jobId}/retry`, { method: "POST" });
 }
 
 export function fmtBytes(n: number): string {

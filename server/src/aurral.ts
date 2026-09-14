@@ -26,6 +26,17 @@ export interface DoneJob {
   createdAt: number;
 }
 
+export interface FailedJob {
+  id: string;
+  artistName: string;
+  trackName: string;
+  albumName: string | null;
+  status: string;
+  error: string | null;
+  createdAt: number | null;
+  completedAt: number | null;
+}
+
 interface RawPlaylist {
   id: string;
   name: string;
@@ -136,6 +147,46 @@ const mapOne = (p: RawPlaylist, kind: Playlist["kind"]): Playlist => ({
       finalPath: r.final_path,
       createdAt: r.created_at,
     }));
+  }
+
+  failedJobs(playlistId: string, limit = 200): FailedJob[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT id, artist_name, track_name, album_name, status, error, created_at, completed_at
+         FROM playlist_download_jobs
+         WHERE playlist_id = ? AND status IN ('failed', 'blocked')
+         ORDER BY (created_at IS NULL) ASC, created_at DESC
+         LIMIT ?`,
+      )
+      .all(playlistId, limit) as Array<{
+      id: string;
+      artist_name: string;
+      track_name: string;
+      album_name: string | null;
+      status: string;
+      error: string | null;
+      created_at: number | null;
+      completed_at: number | null;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      artistName: r.artist_name,
+      trackName: r.track_name,
+      albumName: r.album_name,
+      status: r.status,
+      error: r.error,
+      createdAt: r.created_at,
+      completedAt: r.completed_at,
+    }));
+  }
+
+  sessionToken(): string | undefined {
+    const rows = this.#db
+      .prepare(
+        "SELECT token FROM sessions WHERE expires_at > ? ORDER BY created_at DESC LIMIT 1",
+      )
+      .all(Date.now()) as Array<{ token: string }>;
+    return rows[0]?.token;
   }
 }
 
