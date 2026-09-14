@@ -1,0 +1,13 @@
+services:
+  rekordbox-export:
+    build: .
+    image: rekordbox-export:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    env_file: .env
+    volumes:
+      # Whole dir (WAL mode needs the -wal/-shm sidecars), read-only
+      - /path/to/aurral-data:/data/aurral:ro
+      # Aurral download root + export output
+      - /path/to/downloads:/data/downloads:rw
