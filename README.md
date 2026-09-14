@@ -37,12 +37,9 @@ it just copies finished files into the export folder.
 ## Run with Docker
 
 ```bash
-cp .env.example .env            # fill in your paths + AUTH_TOKEN
+cp .env.example .env            # fill in your paths
 docker compose up -d --build
 ```
-
-`AUTH_TOKEN` (optional) protects every `/api/*` route. The web UI asks for the
-token once and remembers it in `localStorage`.
 
 ### Environment
 
@@ -52,7 +49,6 @@ token once and remembers it in `localStorage`.
 | `AURRAL_DS_ROOT`   | `/app/downloads`      | Container download root used in Aurral `final_path`  |
 | `EXPORT_SRC_ROOT`  | `/data/downloads`     | Where those files live from this container's view    |
 | `EXPORT_ROOT`      | `/data/downloads/Rekordbox` | Output folder for `Rekordbox/<Playlist>`         |
-| `AUTH_TOKEN`       | *(empty)*             | Require this token on `/api/*`                       |
 | `PORT` / `HOST`    | `3001` / `0.0.0.0`    | HTTP bind                                            |
 
 Volumes: mount the whole Aurral data dir (WAL needs the `-wal`/`-shm`
@@ -82,9 +78,6 @@ If `web/dist` is missing the server runs API-only.
 | GET    | `/api/playlists/:id/files`    | Files currently exported              |
 | GET    | `/api/playlists/:id/file?name=`| Download one file                    |
 | GET    | `/api/playlists/:id/zip`      | Download the whole export as ZIP      |
-
-Set the token with header `x-api-key` or query `?token=` when `AUTH_TOKEN` is
-configured.
 
 ## License
 

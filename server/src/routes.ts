@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { aurral, type Playlist } from "./aurral.ts";
-import { env } from "./config.ts";
 import { exportDir, listExports, runExport, streamFile, streamZip } from "./export.ts";
 
 function findPlaylist(id: string): Playlist {
@@ -16,17 +15,6 @@ function summary(p: Playlist) {
 }
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
-  if (env.authToken) {
-    app.addHook("preHandler", async (req, reply) => {
-      if (!req.url.startsWith("/api/") || req.url === "/api/health") return;
-      const q = req.query as Record<string, string>;
-      const key = (req.headers["x-api-key"] as string | undefined) ?? q.token;
-      if (key !== env.authToken) {
-        void reply.code(401).send({ error: "unauthorized" });
-      }
-    });
-  }
-
   app.get("/api/health", async () => ({ ok: true, time: Date.now() }));
 
   app.get("/api/playlists", async () => ({

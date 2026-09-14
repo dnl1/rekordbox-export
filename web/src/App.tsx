@@ -1,13 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  AuthRequired,
   exportPlaylist,
   fileUrl,
   fmtBytes,
   getFiles,
   getPlaylists,
-  getToken,
-  setToken,
   type ExportFile,
   type Playlist,
   zipUrl,
@@ -33,7 +30,7 @@ function PlaylistCard({
       try {
         setFiles((await getFiles(playlist.id)).files);
       } catch (e) {
-        setMsg(e instanceof Error ? e.message : "erro ao listar");
+        setMsg(e instanceof Error ? e.message : "failed to list files");
       }
     }
   }, [files, playlist.id]);
@@ -45,10 +42,10 @@ function PlaylistCard({
       const res = await exportPlaylist(playlist.id);
       onExported(res.playlist);
       const exp = res.export as { copied?: number; files: number };
-      setMsg(exp.copied && exp.copied > 0 ? `${exp.copied} copiadas` : "já em dia");
+      setMsg(exp.copied && exp.copied > 0 ? `${exp.copied} copied` : "up to date");
       setFiles((await getFiles(playlist.id)).files);
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "erro ao exportar");
+      setMsg(e instanceof Error ? e.message : "export failed");
     } finally {
       setBusy(false);
     }
@@ -74,32 +71,32 @@ function PlaylistCard({
         <div className="prog-label">
           <b>{s.done}/{s.total}</b>
           {s.total > 0 && <span> ({pct}%)</span>}
-          <span className="src-note">· {playlist.enabled ? "ativa" : "pausada"}</span>
+          <span className="src-note">· {playlist.enabled ? "active" : "paused"}</span>
         </div>
       </div>
 
       <div className="chips">
         {chip("done", s.done, "ok")}
-        {chip("baixando", s.downloading, "dl")}
-        {chip("pendente", s.pending, "pend")}
-        {chip("falha", s.failed, "fail")}
+        {chip("downloading", s.downloading, "dl")}
+        {chip("pending", s.pending, "pend")}
+        {chip("failed", s.failed, "fail")}
         {chip("blocked", s.blocked, "fail")}
       </div>
 
       <div className="export-info">
-        <span>Pasta Rekordbox: <b>{playlist.export.files}</b> arquivos</span>
+        <span>Rekordbox folder: <b>{playlist.export.files}</b> files</span>
         <span className="muted">{fmtBytes(playlist.export.size)}</span>
       </div>
 
       <div className="actions">
         <button className="btn primary" onClick={doExport} disabled={busy}>
-          {busy ? "Exportando…" : "Exportar"}
+          {busy ? "Exporting…" : "Export"}
         </button>
         {playlist.export.files > 0 && (
-          <a className="btn" href={zipUrl(playlist.id)}>Baixar ZIP ({fmtBytes(playlist.export.size)})</a>
+          <a className="btn" href={zipUrl(playlist.id)}>Download ZIP ({fmtBytes(playlist.export.size)})</a>
         )}
         <button className="btn ghost" onClick={toggleFiles}>
-          {open ? "Ocultar" : "Arquivos"}
+          {open ? "Hide" : "Files"}
         </button>
       </div>
       {msg && <div className="msg">{msg}</div>}
@@ -107,9 +104,9 @@ function PlaylistCard({
       {open && (
         <div className="filelist">
           {files === null ? (
-            <div className="muted">carregando…</div>
+            <div className="muted">loading…</div>
           ) : files.length === 0 ? (
-            <div className="muted">nenhum arquivo exportado ainda</div>
+            <div className="muted">no files exported yet</div>
           ) : (
             <ul>
               {files.map((f) => (
@@ -129,11 +126,8 @@ function PlaylistCard({
 
 export default function App() {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
-  const [needsAuth, setNeedsAuth] = useState(false);
-  const [token, setTokenState] = useState(getToken());
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -141,10 +135,8 @@ export default function App() {
       setRefreshing(true);
       const data = await getPlaylists();
       setPlaylists(data.playlists);
-      setNeedsAuth(false);
     } catch (e) {
-      if (e instanceof AuthRequired) setNeedsAuth(true);
-      else setError(e instanceof Error ? e.message : "erro ao carregar");
+      setError(e instanceof Error ? e.message : "failed to load");
     } finally {
       setRefreshing(false);
     }
@@ -152,19 +144,9 @@ export default function App() {
 
   useEffect(() => {
     void refresh();
-    const t = setInterval(() => {
-      if (!needsAuth) void refresh();
-    }, POLL_MS);
+    const t = setInterval(() => void refresh(), POLL_MS);
     return () => clearInterval(t);
-  }, [needsAuth, refresh]);
-
-  const saveToken = () => {
-    const t = inputRef.current?.value.trim() ?? "";
-    setToken(t);
-    setTokenState(t);
-    setNeedsAuth(false);
-    void refresh();
-  };
+  }, [refresh]);
 
   const onExported = (p: Playlist) =>
     setPlaylists((ps) => ps.map((x) => (x.id === p.id ? p : x)));
@@ -175,26 +157,14 @@ export default function App() {
         <h1>🎛️ Rekordbox Export</h1>
         <div className="head-right">
           <span className="muted">{playlists.length} playlists</span>
-          <span className={`dot ${refreshing ? "spin" : ""}`} title="atualizando" />
+          <span className={`dot ${refreshing ? "spin" : ""}`} title="refreshing" />
           <button className="btn ghost" onClick={() => void refresh()} disabled={refreshing}>
-            Atualizar
+            Refresh
           </button>
         </div>
       </header>
 
       {error && <div className="banner err">{error}</div>}
-
-      {needsAuth && (
-        <div className="banner auth">
-          <b>Token de acesso necessário.</b>
-          <input ref={inputRef} type="password" placeholder="cole o token" />
-          <button className="btn primary" onClick={saveToken}>Salvar</button>
-        </div>
-      )}
-
-      {token && !needsAuth && (
-        <div className="banner subtle">Token configurado ({token.slice(0, 4)}…).</div>
-      )}
 
       <main className="grid">
         {playlists.map((p) => (
@@ -203,7 +173,7 @@ export default function App() {
       </main>
 
       <footer className="muted">
-        Lê os downloads do Aurral e monta a pasta de export pronta para o Rekordbox.
+        Reads Aurral's downloads and builds export folders ready for Rekordbox.
       </footer>
     </div>
   );

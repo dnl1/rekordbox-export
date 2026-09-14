@@ -1,5 +1,3 @@
-const TOKEN_KEY = "rbx_token";
-
 export interface JobStats {
   done: number;
   downloading: number;
@@ -25,30 +23,8 @@ export interface ExportFile {
   size: number;
 }
 
-export class AuthRequired extends Error {}
-
-export function getToken(): string {
-  return localStorage.getItem(TOKEN_KEY) ?? "";
-}
-
-export function setToken(token: string): void {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
-}
-
-export function withToken(url: string): string {
-  const token = getToken();
-  if (!token) return url;
-  return url + (url.includes("?") ? "&" : "?") + `token=${encodeURIComponent(token)}`;
-}
-
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = { ...(init?.headers as Record<string, string>) };
-  const token = getToken();
-  if (token) headers["x-api-key"] = token;
-
-  const res = await fetch(path, { ...init, headers });
-  if (res.status === 401) throw new AuthRequired();
+  const res = await fetch(path, init);
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
   return res.json() as Promise<T>;
 }
@@ -66,11 +42,11 @@ export function getFiles(id: string): Promise<{ dir: string; files: ExportFile[]
 }
 
 export function fileUrl(id: string, name: string): string {
-  return withToken(`/api/playlists/${id}/file?name=${encodeURIComponent(name)}`);
+  return `/api/playlists/${id}/file?name=${encodeURIComponent(name)}`;
 }
 
 export function zipUrl(id: string): string {
-  return withToken(`/api/playlists/${id}/zip`);
+  return `/api/playlists/${id}/zip`;
 }
 
 export function fmtBytes(n: number): string {

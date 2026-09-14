@@ -7,5 +7,4 @@ export const env = {
   dsRoot: process.env.AURRAL_DS_ROOT ?? "/app/downloads",
   srcRoot: process.env.EXPORT_SRC_ROOT ?? "/data/downloads",
   exportRoot: process.env.EXPORT_ROOT ?? join("/data/downloads", "Rekordbox"),
-  authToken: process.env.AUTH_TOKEN ?? "",
 };
