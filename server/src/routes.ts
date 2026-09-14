@@ -18,7 +18,7 @@ function summary(p: Playlist) {
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   if (env.authToken) {
     app.addHook("preHandler", async (req, reply) => {
-      if (!req.url.startsWith("/api/")) return;
+      if (!req.url.startsWith("/api/") || req.url === "/api/health") return;
       const q = req.query as Record<string, string>;
       const key = (req.headers["x-api-key"] as string | undefined) ?? q.token;
       if (key !== env.authToken) {

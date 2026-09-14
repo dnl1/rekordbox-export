@@ -7,13 +7,18 @@ import { env } from "./config.ts";
 import { registerRoutes } from "./routes.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const webDir = resolve(here, "../../web/dist");
+const candidates = [
+  resolve(here, "../web/dist"),
+  resolve(here, "../../web/dist"),
+  resolve(process.cwd(), "web/dist"),
+];
+const webDir = candidates.find((dir) => existsSync(join(dir, "index.html")));
 
 const app = Fastify({ logger: true, trustProxy: true });
 
 await registerRoutes(app);
 
-if (existsSync(join(webDir, "index.html"))) {
+if (webDir) {
   await app.register(fastifyStatic, {
     root: webDir,
     prefix: "/",
